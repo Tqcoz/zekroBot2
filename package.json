@@ -1,20 +1,26 @@
 {
   "name": "zekrobot2",
-  "version": "0.13.0-beta",
+  "version": "0.30.2-beta",
   "description": "Rework of the original JDA zekroBot",
   "main": "src/main.js",
   "scripts": {
-    "test": "node src/main.js -d",
+    "test": "node src/main.js -test $DISCORD_TOKEN",
     "start": "node src/main.js"
   },
-  "author": "",
+  "author": "zekro <contact@zekro.de>",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^11.2.1",
-    "discordjs-cmds": "^0.6.7",
+    "discord.js": "^11.3.2",
+    "discordjs-cmds": "^0.8.0",
     "extendutils": "^0.2.1",
     "colors": "^1.1.2",
     "coffeescript": "^2.0.3",
-    "mysql": "^2.15.0"
+    "mysql": "^2.15.0",
+    "ytdl-core": "^0.20.2",
+    "opusscript": "^0.0.6",
+    "node-opus": "^0.2.7",
+    "pastebin-js": "^0.5.1",
+    "readline-sync": "^1.4.9",
+    "dictcc-js": "^1.0.0"
   }
 }

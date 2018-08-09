@@ -2,6 +2,7 @@ Main = require '../main'
 client = Main.client
 Discord = require 'discord.js'
 Embeds = require '../util/embeds'
+Funcs = require '../util/funcs'
 
 
 clear = (channel, ammount, user) ->
@@ -9,8 +10,7 @@ clear = (channel, ammount, user) ->
         .then (msgs) ->
             if user
                 msgs = msgs.filter (m) -> m.member.id == user.id
-            msgs.array()[0..ammount].forEach (m) ->
-                m.delete()
+            channel.bulkDelete msgs.array()[0..ammount]
 
 
 exports.ex = (msg, args) ->
@@ -23,9 +23,7 @@ exports.ex = (msg, args) ->
         ammount = parseInt args[0]
         if 0 < ammount < 301
             if args.length > 1
-                memb = guild.members.find (m) -> m.id == args[1..].join(' ').replace(/(<@)|>/g, '')
-                if not memb
-                    memb = guild.members.find (m) -> m.displayName.toLowerCase().indexOf(args[1..].join(' ').toLowerCase()) > -1
+                memb = Funcs.fetchMember(guild, args[1], true)
                 if not memb
                     Embeds.error chan, "Can not fetch any members to the input ```#{args[1..].join(' ')}```", "INVALID INPUT"
                     return

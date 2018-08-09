@@ -5,12 +5,14 @@ const Embeds = require('../util/embeds')
 const Discord = require('discord.js')
 const util = require('util')
 const Statics = require('../util/statics')
+const Funcs = require('../util/funcs')
 
 
 const emojis = '\u0031\u20E3 \u0032\u20E3 \u0033\u20E3 \u0034\u20E3 \u0035\u20E3 \u0036\u20E3 \u0037\u20E3 \u0038\u20E3 \u0039\u20E3 \u0030\u20E3'.split(' ')
 var polls = {}
 
 exports.load = () => Poll.load()
+
 
 class Poll {
 
@@ -28,18 +30,16 @@ class Poll {
 
         client.on('messageReactionAdd', (reaction, user) => {
             let msg = reaction.message
+            if (!user || !this.msg)
+                return
             if (user.id != client.user.id && msg.id == this.msg.id) {
                 let emoji = reaction.emoji.name
                 let vote = emojis.indexOf(emoji)
                 if (vote > -1 && vote < this.poss.length) {
-                    if (!this.vote(user, vote))
-                        Embeds.error(this.msg.channel, `You can only vote once, <@${user.id}>`).then(m => {
-                            setTimeout(() => m.delete(), 3000)
-                        })
-                    else if (!ans)
+                    if (this.vote(user, vote))
                         this.save()
-                    reaction.remove(user)
                 }
+                reaction.remove(user)
             }
         })
     }
@@ -97,25 +97,43 @@ class Poll {
 
     static load() {
         return new Promise((resolve, reject) => {
-            Mysql.query(`SELECT * FROM votes`, (err, res) => {
-                if (!err && res) {
-                    res.forEach(r => {
-                        let data = JSON.parse(r.data)
-                        let guild = client.guilds.find(g => g.id == data.msg.guild)
-                        let poll = new Poll(
-                            guild.members.find(m => m.id == data.member),
-                            guild.channels.find(c => c.id == data.msg.channel),
-                            data.topic.replace(/(--nl--)/gm, '\n'),
-                            data.poss.map(p => p.replace(/(--nl--)/gm, '\n')),
-                            data.ans
-                        )
-                        polls[r.membid] = poll
-                        resolve()
-                    })
-                }
-                else
-                    reject()
-            })
+            try {
+                Mysql.query(`SELECT * FROM votes`, (err, res) => {
+                    if (!err && res) {
+                        res.forEach(r => {
+                            let data = JSON.parse(r.data)
+                            let guild = client.guilds.find(g => g.id == data.msg.guild)
+                            if (!guild) {
+                                reject()
+                                return
+                            }
+                            let chan = guild.channels.find(c => c.id == data.msg.channel)
+                            let poll = new Poll(
+                                guild.members.find(m => m.id == data.member),
+                                chan,
+                                data.topic.replace(/(--nl--)/gm, '\n'),
+                                data.poss.map(p => p.replace(/(--nl--)/gm, '\n')),
+                                data.ans
+                            )
+                            polls[r.membid] = poll
+    
+                            // Thanks @ Lee#6874 (github.com/LeeDJD) for the answer
+                            chan.fetchMessages()
+                                .then(messages => {
+                                    messages.find(m => m.id == data.msg.id).delete()
+                                })
+                                .catch(console.error);
+    
+                            resolve()
+                        })
+                    }
+                    else
+                        reject()
+                })
+            }
+            catch (e) {
+                reject(e)
+            }
         })
     }
 
@@ -130,6 +148,7 @@ exports.ex = (msg, args) => {
 
     let memb = msg.member
     let chan = msg.channel
+    let guild = memb.guild
 
     if (args.length < 1) {
 
@@ -139,8 +158,23 @@ exports.ex = (msg, args) => {
             case 'close':
             case 'stop':
             case 'end':
-                if (memb.id in polls)
+                if (!args[1] && memb.id in polls)
                     polls[memb.id].close()
+                else if (args[1]) {
+                    if (Main.cmd.getPermLvl(memb) >= 4) {
+                        let rmemb = Funcs.fetchMember(guild, args[1])
+                        console.log(rmemb)
+                        if (rmemb)
+                            if (polls[rmemb.id])
+                                polls[rmemb.id].close()
+                            else
+                                Embeds.error(chan, `The user <@${rmemb.id}> has no open votes.`)
+                        else
+                            Embeds.error(chan, 'Could not fetch any member with the identifier ```' + args[1] + '```')
+                    }
+                    else
+                        Embeds.error(chan, 'You need at least permission level `4` to close other members votes.')
+                }
                 else
                     Embeds.error(chan, 'You can only close a vote if you created one before.')
                 break
@@ -154,7 +188,9 @@ exports.ex = (msg, args) => {
                 else {
                     Embeds.error(chan, 'There is currently a poll created by you running.\nClose it with `vote close` before opening another one.')
                 }
+                msg.delete()
                 break
+                
         }
     }
 }

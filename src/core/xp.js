@@ -9,7 +9,20 @@ const Logger = require('../util/logger')
 
 
 var xploop
+var xptmp = {}
 
+
+function getLvlFromXp(xpamm) {
+    let start = config.exp.startlvl
+    let delta = config.exp.delta
+    function _getreq(x) {
+        return x == 0 ? 0 : start * delta ** (x - 1)
+    }
+    let lvl = 0
+    while (xpamm > _getreq(lvl))
+        lvl++
+    return  lvl - 1
+}
 
 function getParsedUserLvl(member, cb, raw) {
     getMembXp(member, (res) => {
@@ -21,17 +34,13 @@ function getParsedUserLvl(member, cb, raw) {
         else {
             let start = config.exp.startlvl
             let delta = config.exp.delta
+            let lvl = getLvlFromXp(res)
             function _getreq(x) {
                 return x == 0 ? 0 : start * delta ** (x - 1)
             }
-            let lvl = 0
-            while (res > _getreq(lvl))
-                lvl++
-            lvl = lvl - 1
             let nextlvl = parseInt(res - _getreq(lvl))
             let nextlvln = parseInt(_getreq(lvl + 1))
             let nextlvlp = parseInt((nextlvl / nextlvln) * 100)
-
             if (raw)
                 cb({
                     lvl,
@@ -77,6 +86,21 @@ function getGuildXp(guild, cb) {
     })
 }
 
+function submitXpTmp() {
+    Object.keys(xptmp).forEach(id => {
+        client.guilds
+            .find(g => g.id == xptmp[id].guild)
+            .fetchMember(id)
+                .then(m => { 
+                    changeXpVal(xptmp[id].xp, m)
+                    xptmp = {}
+                })
+                .catch(() => {
+                    xptmp = {}
+                })
+    })
+}
+
 
 client.on('message', msg => {
     if (msg.channel.type == 'text') {
@@ -88,27 +112,26 @@ client.on('message', msg => {
 
         let xpamm = parseInt(Math.log((cont.length / config.exp.flatter) + config.exp.cap) * config.exp.xpmsgmultiplier)
 
-        if (xpamm > 0)
-            changeXpVal(xpamm, memb)
-
-        /*
-            IDEA:
-            Maybe later here an notification message into the channel to notify user
-            reached a specific level.
-            → Must be disableable
-        */
+        if (xpamm > 0) {
+            if (xptmp[memb.id])
+                xptmp[memb.id].xp += xpamm
+            else
+                xptmp[memb.id] = { xp: xpamm, guild: memb.guild.id }
+                
+        }
     }
 })
 
 client.on('ready', () => {
     xploop = setInterval(() => {
-        client.guilds.forEach(g => {
-            g.members
-                .filter(m => m.presence.status != 'offline')
-                .forEach(m => {
-                    changeXpVal(config.exp.xpinterval, m)
-                })
-        })
+        // client.guilds.forEach(g => {
+        //     g.members
+        //         .filter(m => m.presence.status != 'offline')
+        //         .forEach(m => {
+        //             changeXpVal(config.exp.xpinterval, m)
+        //         })
+        // })
+        submitXpTmp()
     }, config.exp.interval * 60000)
     Logger.info(`XP Loop running in interval thread #${xploop}`)
 })
@@ -118,5 +141,6 @@ module.exports = {
     changeXpVal,
     getMembXp,
     getGuildXp,
-    getParsedUserLvl
+    getParsedUserLvl,
+    getLvlFromXp
 }
